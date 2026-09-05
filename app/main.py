@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +29,11 @@ def startup() -> None:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "MarginGuard"}
+
+
+@app.head("/", include_in_schema=False)
+def dashboard_head() -> Response:
+    return Response(status_code=200)
 
 
 @app.get("/", response_class=HTMLResponse)
