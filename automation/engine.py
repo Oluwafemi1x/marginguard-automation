@@ -1,5 +1,7 @@
 import re
 import shutil
+import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -66,6 +68,34 @@ def _recommend(our: float, competitor: float, stock: str) -> tuple[str, str, flo
     )
 
 
+def _ensure_chromium(executable_path: str) -> None:
+    """Install the Playwright Chromium binary if the deploy cache does not contain it."""
+    if Path(executable_path).exists():
+        return
+
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=180,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        output = getattr(exc, "stdout", "") or ""
+        raise RuntimeError(
+            "Chromium is not installed and automatic Playwright browser installation failed. "
+            f"Installer output: {output[-1200:]}"
+        ) from exc
+
+    if not Path(executable_path).exists():
+        raise RuntimeError(
+            "Playwright reported a successful Chromium install, but the expected browser "
+            f"executable is still missing at {executable_path}."
+        )
+
+
 def scan_items(
     items: list[dict],
     headless: bool = True,
@@ -74,7 +104,13 @@ def scan_items(
     results = []
     with sync_playwright() as playwright:
         system_chromium = shutil.which("chromium") or shutil.which("chromium-browser")
-        launch_kwargs = {"headless": headless}
+        if not system_chromium:
+            _ensure_chromium(playwright.chromium.executable_path)
+
+        launch_kwargs = {
+            "headless": headless,
+            "args": ["--disable-dev-shm-usage", "--no-sandbox"],
+        }
         if system_chromium:
             launch_kwargs["executable_path"] = system_chromium
 
